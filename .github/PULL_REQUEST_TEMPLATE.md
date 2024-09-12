@@ -24,14 +24,14 @@
     - [ ] Does the code avoid additions and subtractions on numbers with greatly different magnitudes?
     - [ ] Are divisors tested for zero or noise?
   - [ ]**Loops and Branches**
-    - [ ]Are all loops, branches, and logic constructs complete, correct, and properly nested?
-    - [ ]Are the most common cases tested first in IF- -ELSEIF chains?
-    - [ ]Are all cases covered in an IF- -ELSEIF or CASE block, including ELSE or DEFAULT clauses?
-    - [ ]Does every case statement have a default?
-    - [ ]Are loop termination conditions obvious and achievable? Ex. For do…while loop, exit criteria should be know clearly to reduce risk of infinite loops?
-    - [ ]Are indexes or subscripts properly initialized, just prior to the loop?
-    - [ ]Can any statements that are enclosed within loops be placed outside the loops?
-    - [ ]Does the code in the loop avoid manipulating the index variable or using it upon exit from the loop?
+    - [ ] Are all loops, branches, and logic constructs complete, correct, and properly nested?
+    - [ ] Are the most common cases tested first in IF- -ELSEIF chains?
+    - [ ] Are all cases covered in an IF- -ELSEIF or CASE block, including ELSE or DEFAULT clauses?
+    - [ ] Does every case statement have a default?
+    - [ ] Are loop termination conditions obvious and achievable? Ex. For do…while loop, exit criteria should be know clearly to reduce risk of infinite loops?
+    - [ ] Are indexes or subscripts properly initialized, just prior to the loop?
+    - [ ] Can any statements that are enclosed within loops be placed outside the loops?
+    - [ ] Does the code in the loop avoid manipulating the index variable or using it upon exit from the loop?
   - [ ]**Defensive Programming**
     - [ ]  Are imported data and input arguments checked for validity and completeness?
     - [ ]  Are all output variables assigned?
