@@ -1,4 +1,4 @@
-![image](https://github.com/user-attachments/assets/9f0fcfdc-ad58-44e9-954a-8bfc185f0cb0)## Pull Request Checklist
+## Pull Request Checklist
 
 - [ ] **Code Review**
   - [ ] **General**
