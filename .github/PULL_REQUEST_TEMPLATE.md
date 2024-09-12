@@ -1,6 +1,6 @@
 ## Pull Request Checklist
 
-- [ ] ***Code Review***
+- [ ] **Code Review**
   - [ ] **General**
     - [ ] Is the code well-structured, consistent in style, and consistently formatted?
     - [ ] Confirm that all procedures called appropriately, and all code is reachable and utilizede?
