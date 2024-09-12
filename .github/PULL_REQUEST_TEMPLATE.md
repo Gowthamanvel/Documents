@@ -107,6 +107,11 @@ Is SDP for CUT studied?
     - [ ]  Are negative test cases included to test the software's responses to all possible erroneous inputs - data inputs, message inputs, etc?
     - [ ]  Are test cases included for failure in external module APIs?
     - [ ]  In the calling functions, are test cases included to test all possible return values from called functions?
+  - [ ] **Safety Check**
+    - [ ] Does the Test cases covered all requirement ?
+    - [ ] Does the test case covered Boundry check analysis
+    - [ ] Does the test cases coveres Generation and analysis of equivalence classes
+   
 
 
 
