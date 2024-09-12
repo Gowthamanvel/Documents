@@ -18,12 +18,12 @@
     - [ ] Do all assigned variables have proper type consistency or casting?
     - [ ] Are variables initiatialized?
     - [ ] Are there any redundant or unused variables?
-  - [ ]**Arithmetic Operators**
+  - [ ] **Arithmetic Operators**
     - [ ] Does the code avoid comparing floating-point numbers for equality?
     - [ ] Does the code systematically prevent rounding errors?
     - [ ] Does the code avoid additions and subtractions on numbers with greatly different magnitudes?
     - [ ] Are divisors tested for zero or noise?
-  - [ ]**Loops and Branches**
+  - [ ] **Loops and Branches**
     - [ ] Are all loops, branches, and logic constructs complete, correct, and properly nested?
     - [ ] Are the most common cases tested first in IF- -ELSEIF chains?
     - [ ] Are all cases covered in an IF- -ELSEIF or CASE block, including ELSE or DEFAULT clauses?
@@ -32,7 +32,7 @@
     - [ ] Are indexes or subscripts properly initialized, just prior to the loop?
     - [ ] Can any statements that are enclosed within loops be placed outside the loops?
     - [ ] Does the code in the loop avoid manipulating the index variable or using it upon exit from the loop?
-  - [ ]**Defensive Programming**
+  - [ ] **Defensive Programming**
     - [ ]  Are imported data and input arguments checked for validity and completeness?
     - [ ]  Are all output variables assigned?
     - [ ]  Are the correct data operated on in each statement?
