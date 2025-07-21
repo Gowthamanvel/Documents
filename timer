@@ -1,0 +1,51 @@
+
+gboolean uart_rx_callback(GIOChannel *source, GIOCondition condition, gpointer data) {
+    gchar buf[256];
+    gsize bytes_read;
+    GError *error = NULL;
+
+    if (condition & G_IO_IN) {
+        GIOStatus status = g_io_channel_read_chars(source, buf, sizeof(buf) - 1, &bytes_read, &error);
+        if (status == G_IO_STATUS_NORMAL && bytes_read > 0) {
+            buf[bytes_read] = '\0';
+            g_print("UART RX: %s\n", buf);
+        }
+    }
+
+    return TRUE;
+}
+
+
+gboolean periodic_timeout(gpointer data) {
+    g_print("Periodic task running...\n");
+    return TRUE; // Keep running periodically
+}
+
+
+int main() {
+    const char *uart_dev = "/dev/ttyS3"; // Adjust for FLEXCOM3
+    int fd = open(uart_dev, O_RDWR | O_NOCTTY | O_NONBLOCK);
+    if (fd < 0) {
+        perror("UART open failed");
+        return 1;
+    }
+
+    // Configure UART (termios setup omitted for brevity)
+
+    GIOChannel *channel = g_io_channel_unix_new(fd);
+    g_io_channel_set_encoding(channel, NULL, NULL); // Binary mode
+    g_io_channel_set_flags(channel, G_IO_FLAG_NONBLOCK, NULL);
+    g_io_add_watch(channel, G_IO_IN | G_IO_HUP | G_IO_ERR, uart_rx_callback, NULL);
+
+    // Add periodic timeout (e.g., every 2 seconds)
+    g_timeout_add(2000, periodic_timeout, NULL);
+
+    // Start GLib main loop
+    GMainLoop *loop = g_main_loop_new(NULL, FALSE);
+    g_main_loop_run(loop);
+
+    // Cleanup
+    g_io_channel_unref(channel);
+    close(fd);
+    return 0;
+}
