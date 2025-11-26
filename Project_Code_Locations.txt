@@ -1,0 +1,74 @@
+GraudaIII DLL code path:
+
+C:\OLDlaptop\Garuda3_Latest_Working_code\USB --working latest one.......
+
+C:\OLDlaptop\Garuda3_Latest_Working_code\USB - KWP --- kwp implementation code
+
+
+GraudaIII wireshark batch files:
+
+C:\chiru_backup\Scripts\
+
+
+GarudaIII all drivers exe path from 3.2 to 3.1.3:
+
+C:\chiru_backup\
+
+
+GarudaIII driver development path:
+
+C:\chiru_backup\Garuda3_Mahindra_Drivers.wse
+
+
+GarudaIII Drivers release notes path :
+
+C:\chiru_backup\Garuda3\GarudaIII_ReleaseNotes_Mahindra.docx
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+GarudaII DLL code path:
+
+C:\GarudaII\Mahindra_207_FS_Release - Working\Mahindra_207_FS_Release - Working\PCApps\J2534\Source\USB --- working one
+
+C:\GarudaII\Mahindra_207_FS_Release - Working\Mahindra_207_FS_Release_changes_Garuda2- padding\PCApps\J2534\Source\USB ---PADDING bytes code
+
+
+GarudaII drivers development path:
+
+C:\chiru_backup\Garuda2534V2.0-Mahindra.wse
+
+
+GarudaII tata motors Kline disable code
+
+C:\Data\garuda2\Mahindra_204R\01_Mahindra_204R_Firmware_Base - copy(2)-working_K_L_Enabling_Disabling.zip
+
+
+GarudaII mahindra firmware code and Device ID code
+
+C:\Data\garuda2\Mahindra_204R\01_Mahindra_204R_Firmware_Base
+
+C:\Data\garuda2\Mahindra_204R\DeviceID\
+
+
+GarudaII bootloader code
+
+C:\Data\garuda2\Mahindra_204R\DeviceID\Garuda_Bootloader
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+GarudaLite DLL 
+shared to Gowtham bro
+
+
+GarudaLite firmware and bootloader
+C:\GarudaLite\--shared to kalai
+
+GarudaLite Python script
+C:\GarudaLite\SAM-BA_Bootloader_App.py  -- new one
+C:\GarudaLite\python\python\SAM-BA_Bootloader_App.py  -- old one
+
+GarudaLite TMTL drivers
+C:\GarudaLite\GarudaTAFEGenericDrivers_ver_ (1).EXE
+
+
