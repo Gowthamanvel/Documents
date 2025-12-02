@@ -1,34 +1,16 @@
-uint16_t ISO9141_14230_Get_Data_Length( uint8_t recvdData, uint16_t* lengthIndex)
-{
-	uint8_t frameAddrModeInfo = ADDRESS_PRESENT;
-	uint16_t pktlength=0;
-	
-	if(*lengthIndex == 0)
-	{
-		
-		if( (recvdData & FRAME_FORMAT_MODE_BITS) == 0)
-		{
-			frameAddrModeInfo = NO_ADDRESS;
-		}
-		else
-		{
-			frameAddrModeInfo = ADDRESS_PRESENT;
-		}
-		
-		if( (recvdData & FRAME_FORMAT_HDR_LENGTH_BITS) != FRAME_FORMAT_HDR_LEN_ZERO)
-		{
-			pktlength = ( (recvdData & FRAME_FORMAT_HDR_LENGTH_BITS) + ((frameAddrModeInfo == ADDRESS_PRESENT) ? HDR_FRM_TA_SA_CK : HDR_FRM_CK));
-			*lengthIndex =0;
-		}
-		else
-		{
-			*lengthIndex = ((frameAddrModeInfo == ADDRESS_PRESENT) ? LENGTH_INDEX_WITH_ADDR : LENGTH_INDEX_WO_ADDR);
-		}
-	}
-	else
-	{
-		pktlength = recvdData + ((frameAddrModeInfo == ADDRESS_PRESENT) ? HDR_FRM_TA_SA_LEN_CK : HDR_FRM_LEN_CK);
-		*lengthIndex =0;
-	}
-	return (pktlength);
-}
+/* configure uart */
+ tcgetattr(fd, &options);
+ options.c_cflag &= ~PARENB;
+ options.c_cflag &= ~CSTOPB;
+ options.c_cflag &= ~CSIZE;
+ options.c_cflag |= CS8;
+ options.c_cc[VTIME] = 10; // read timeout 10*100ms
+ options.c_cc[VMIN] = 0;
+ options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
+ options.c_oflag &= ~OPOST;
+ options.c_iflag &= ~(ICRNL | IXON);
+ cfsetispeed(&options, B115200);
+ cfsetospeed(&options, B115200);
+ options.c_cflag |= (CLOCAL | CREAD);
+ tcflush(fd, TCIFLUSH);
+ tcsetattr(fd, TCSANOW, &options);
