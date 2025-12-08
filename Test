@@ -40,3 +40,28 @@
                         newt.c_cc[VTIME] = 0;
 
 
+
+static DECLARE_WAIT_QUEUE_HEAD(timer_wq);
+static int timer_done = 0;
+static struct hrtimer kep_timer;
+static ktime_t kt;
+
+
+static enum hrtimer_restart kep_timer_callback(struct hrtimer *timer)
+{
+    timer_done = 1;
+    wake_up_interruptible(&timer_wq);  // Notify user space
+    return HRTIMER_NORESTART;
+}
+
+static void start_hrtimer(unsigned int timeout_ms)
+{
+    timer_done = 0;
+    kt = ktime_set(0, timeout_ms * 1000000); // ms to ns
+    hrtimer_init(&kep_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+    kep_timer.function = kep_timer_callback;
+    hrtimer_start(&kep_timer, kt, HRTIMER_MODE_REL);
+}
+
+
+
