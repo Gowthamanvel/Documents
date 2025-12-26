@@ -41,27 +41,226 @@
 
 
 
-static DECLARE_WAIT_QUEUE_HEAD(timer_wq);
-static int timer_done = 0;
-static struct hrtimer kep_timer;
-static ktime_t kt;
+
+#include <glib.h>
+#include <sys/timerfd.h>
+#include <unistd.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <errno.h>
+#include <string.h>
+
+static void on_tick(void) {
+    g_print("on_tick() invoked\n");
+}
+
+static gboolean on_timerfd_ready(GIOChannel *source, GIOCondition cond, gpointer user_data) {
+    int tfd = g_io_channel_unix_get_fd(source);
+    uint64_t expirations = 0;
+
+    ssize_t r = read(tfd, &expirations, sizeof(expirations));
+    if (r < 0) {
+        if (errno == EINTR || errno == EAGAIN) return TRUE;
+        g_warning("read(timerfd) failed: %s", g_strerror(errno));
+        return TRUE;
+    }
+
+    // ---- Policy A: catch up on all missed expirations ----
+    for (uint64_t i = 0; i < expirations; ++i) {
+        on_tick();
+    }
+
+    // ---- Policy B: best-effort, just once ----
+    // on_tick();
+
+    return TRUE; // keep the watch active
+}
+
+int main(void) {
+    int tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
+    if (tfd < 0) { perror("timerfd_create"); return 1; }
+
+    // Arm a 500ms periodic timer
+    struct itimerspec its = {0};
+    its.it_value.tv_sec = 0; its.it_value.tv_nsec = 500 * 1000000;   // first in 500ms
+    its.it_interval = its.it_value;                                  // periodic 500ms
+    timerfd_settime(tfd, 0, &its, NULL);
+
+    GMainLoop *loop = g_main_loop_new(NULL, FALSE);
+    GIOChannel *ch = g_io_channel_unix_new(tfd);
+    g_io_add_watch(ch, G_IO_IN, on_timerfd_ready, NULL);
+
+    g_print("Starting 500ms periodic timer…\n");
+    g_main_loop_run(loop);
+    return 0;
+}
 
 
-static enum hrtimer_restart kep_timer_callback(struct hrtimer *timer)
+/* HR TIMER*/
+
+in common ioctl
+
+
+
+struct kwp_timer_set_ms {
+    __u32 timeout_ms;    // relative timeout in milliseconds
+    __u32 _pad;          // keep 64-bit alignment
+};
+
+struct kwp_timer_status_ms {
+    __u8  running;       // 0/1
+    __u8  expired;       // 0/1 (latched until SET or explicit clear)
+    __u8  _pad8[6];
+    __u64 remaining_ms;  // best-effort (0 if not running)
+};
+
+
+in atmel_serial.c
+
+
+#include <linux/hrtimer.h>
+#include <linux/ktime.h>
+#include <linux/time.h>     // NSEC_PER_MSEC
+#include <linux/atomic.h>
+#include <linux/uaccess.h>
+#include "kwp_timer_ioctl.h"
+
+struct kwp_timer_ctx {
+    struct hrtimer timer;
+    atomic_t expired;     // 0/1 latch set in callback
+    bool running;
+    bool inited;
+};
+
+struct atmel_uart_port {
+    struct uart_port uart;
+    /* ... existing fields ... */
+    struct kwp_timer_ctx kwp;   // add this field
+};
+
+/* --- hrtimer callback --- */
+
+static enum hrtimer_restart kwp_timer_cb(struct hrtimer *timer)
 {
-    timer_done = 1;
-    wake_up_interruptible(&timer_wq);  // Notify user space
+    struct kwp_timer_ctx *c = container_of(timer, struct kwp_timer_ctx, timer);
+    atomic_set(&c->expired, 1);
+    c->running = false;  // one-shot semantics
     return HRTIMER_NORESTART;
 }
 
-static void start_hrtimer(unsigned int timeout_ms)
+/* --- helpers --- */
+
+static void kwp_timer_init_ctx(struct kwp_timer_ctx *c)
 {
-    timer_done = 0;
-    kt = ktime_set(0, timeout_ms * 1000000); // ms to ns
-    hrtimer_init(&kep_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-    kep_timer.function = kep_timer_callback;
-    hrtimer_start(&kep_timer, kt, HRTIMER_MODE_REL);
+    if (c->inited)
+        return;
+
+    hrtimer_init(&c->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+    c->timer.function = kwp_timer_cb;
+    atomic_set(&c->expired, 0);
+    c->running = false;
+    c->inited = true;
 }
+
+static void kwp_timer_cancel(struct kwp_timer_ctx *c)
+{
+    if (c->running) {
+        hrtimer_cancel(&c->timer);
+        c->running = false;
+    }
+}
+
+/* --- uart_ops->ioctl --- */
+
+static int atmel_uart_ioctl(struct uart_port *port, unsigned int cmd, unsigned long arg)
+{
+    struct atmel_uart_port *ap = container_of(port, struct atmel_uart_port, uart);
+
+    switch (cmd) {
+    case KWP_IOC_INIT:
+        kwp_timer_init_ctx(&ap->kwp);
+        kwp_timer_cancel(&ap->kwp);
+        atomic_set(&ap->kwp.expired, 0);
+        return 0;
+
+    case KWP_IOC_SET: {
+        struct kwp_timer_set_ms s;
+        ktime_t kt;
+
+        if (!ap->kwp.inited)
+            kwp_timer_init_ctx(&ap->kwp);
+
+        if (copy_from_user(&s, (void __user *)arg, sizeof(s)))
+            return -EFAULT;
+        if (s.timeout_ms == 0)
+            return -EINVAL;
+
+        // Cancel any running timer; clear latch; then start
+        kwp_timer_cancel(&ap->kwp);
+        atomic_set(&ap->kwp.expired, 0);
+
+#ifdef ms_to_ktime
+        kt = ms_to_ktime(s.timeout_ms);
+#else
+        // timeout_ms is u32 -> safe multiplication
+        kt = ktime_set(0, (u64)s.timeout_ms * NSEC_PER_MSEC);
+#endif
+        ap->kwp.running = true;
+        hrtimer_start(&ap->kwp.timer, kt, HRTIMER_MODE_REL);
+        return 0;
+    }
+
+    case KWP_IOC_CHECK: {
+        struct kwp_timer_status_ms st;
+        memset(&st, 0, sizeof(st));
+
+        st.running = ap->kwp.running ? 1 : 0;
+        st.expired = atomic_read(&ap->kwp.expired) ? 1 : 0;
+
+#ifdef CONFIG_HIGH_RES_TIMERS
+        if (ap->kwp.running) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
+            ktime_t rem = hrtimer_get_remaining(&ap->kwp.timer);
+            s64 ns = ktime_to_ns(rem);
+            st.remaining_ms = (ns > 0) ? (u64)(ns / NSEC_PER_MSEC) : 0;
+#else
+            ktime_t rem = hrtimer_get_remaining(&ap->kwp.timer);
+            s64 ns = rem.tv64;
+            st.remaining_ms = (ns > 0) ? (u64)(ns / NSEC_PER_MSEC) : 0;
+#endif
+        }
+#endif
+
+        // If you prefer edge-trigger semantics:
+        // if (st.expired) atomic_set(&ap->kwp.expired, 0);
+
+        if (copy_to_user((void __user *)arg, &st, sizeof(st)))
+            return -EFAULT;
+        return 0;
+    }
+
+    default:
+        return -ENOIOCTLCMD;  // let serial_core handle other ioctls
+    }
+}
+
+
+in user Space:
+	call init first,
+		 if (ioctl(fd, KWP_IOC_INIT) < 0) { perror("INIT"); return 1; }
+	call set when it is needed	
+		struct kwp_timer_set_ms s = { .timeout_ms = 50 }; // e.g., P2max 50 ms
+		if (ioctl(fd, KWP_IOC_SET, &s) < 0) { perror("SET"); return 1; }
+
+	followed by call check in loop to see whether it is expired
+		
+		if (ioctl(fd, KWP_IOC_CHECK, &st) < 0) { perror("CHECK"); break; }
+
+        if (st.expired) {
+
+			/* do the needful*/
+		}
+
 
 
 
