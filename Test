@@ -1,266 +1,126 @@
-/* configure uart */
- tcgetattr(fd, &options);
- options.c_cflag &= ~PARENB;
- options.c_cflag &= ~CSTOPB;
- options.c_cflag &= ~CSIZE;
- options.c_cflag |= CS8;
- options.c_cc[VTIME] = 10; // read timeout 10*100ms
- options.c_cc[VMIN] = 0;
- options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
- options.c_oflag &= ~OPOST;
- options.c_iflag &= ~(ICRNL | IXON);
- cfsetispeed(&options, B115200);
- cfsetospeed(&options, B115200);
- options.c_cflag |= (CLOCAL | CREAD);
- tcflush(fd, TCIFLUSH);
- tcsetattr(fd, TCSANOW, &options);
+        case ATMEL_IOCTL_SET_MODE:
+                        /* 1. Disable RX/TX */
+                        atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RXDIS | ATMEL_US_TXDIS);
 
 
+                        atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RSTTX | ATMEL_US_RSTRX);
 
+                        /* 2. USART Mode Register */
+                        mr = atmel_uart_readl(port, ATMEL_US_MR);
+                        mr &= ~(ATMEL_US_USMODE | ATMEL_US_PAR | ATMEL_US_CHRL | ATMEL_US_NBSTOP | ATMEL_US_CHMODE);
 
+                        mr |= ATMEL_US_USMODE_LIN_MASTER| ATMEL_US_PAR_NONE | ATMEL_US_CHRL_8 | ATMEL_US_NBSTOP_1 | ATMEL_US_CHMODE_NORMAL;
 
- /* Build new RAW termios from old as baseline */
-                        newt = oldt;
-                        newt.c_iflag = 0;
-                        newt.c_oflag = 0;
-                        newt.c_lflag = 0;
+                        atmel_uart_writel(port, ATMEL_US_MR, mr);
 
+                        /* 3. LIN Mode Register */
+                        linmr = 0x800;
+                        atmel_uart_writel(port, ATMEL_US_LINMR, linmr);
 
-                        newt.c_cflag |= (CLOCAL | CREAD);
-                        newt.c_iflag &= ~(IXON | IXOFF | IXANY);
+                        /* 4. Re-enable RX/TX */
+                        atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RXEN | ATMEL_US_TXEN);
 
-                        newt.c_cflag &= ~(CSIZE | PARENB | CSTOPB | CRTSCTS);
-                        newt.c_cflag |= (CS8 | CREAD | CLOCAL);
+                        break;
+                case ATMEL_IOCTL_SET_LIN_ID:
 
-                        /* 115200 baud (use tty helper to encode) */
-                        tty_termios_encode_baud_rate(&newt, 115200, 115200);
+                        if(copy_from_user (&linid , (void __user*) arg ,sizeof(linid)) )
+                                 return -EFAULT;
 
-                        /* Immediate reads */
-                        newt.c_cc[VMIN]  = 1;
-                        newt.c_cc[VTIME] = 0;
 
 
 
+                        while(!(atmel_uart_readl(port, ATMEL_US_CSR) & ATMEL_US_TXRDY));
+                        if(linid == 0x3D)
+                        {
+                                linmr = 0x801;
+                                atmel_uart_writel(port, ATMEL_US_LINMR, linmr);
+                                while(atmel_uart_readl(port, ATMEL_US_LINMR) != linmr);
+                        }
+                        atmel_uart_writel(port, ATMEL_US_LINIR,linid);
 
-#include <glib.h>
-#include <sys/timerfd.h>
-#include <unistd.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <errno.h>
-#include <string.h>
+                        while(!(atmel_uart_readl(port, ATMEL_US_CSR) & ATMEL_US_LINID));
+                        linmr = 0x800;
+                        atmel_uart_writel(port, ATMEL_US_LINMR, linmr);
 
-static void on_tick(void) {
-    g_print("on_tick() invoked\n");
-}
+                        for(iter = 0 ; iter < 8; iter++)
+                        {
+                              while(!(atmel_uart_readl(port, ATMEL_US_CSR) & ATMEL_US_TXRDY));
+                              atmel_uart_writel(port, ATMEL_US_THR, send_data[iter]);
 
-static gboolean on_timerfd_ready(GIOChannel *source, GIOCondition cond, gpointer user_data) {
-    int tfd = g_io_channel_unix_get_fd(source);
-    uint64_t expirations = 0;
+                        }
+                        break;
 
-    ssize_t r = read(tfd, &expirations, sizeof(expirations));
-    if (r < 0) {
-        if (errno == EINTR || errno == EAGAIN) return TRUE;
-        g_warning("read(timerfd) failed: %s", g_strerror(errno));
-        return TRUE;
-    }
 
-    // ---- Policy A: catch up on all missed expirations ----
-    for (uint64_t i = 0; i < expirations; ++i) {
-        on_tick();
-    }
 
-    // ---- Policy B: best-effort, just once ----
-    // on_tick();
 
-    return TRUE; // keep the watch active
-}
 
-int main(void) {
-    int tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
-    if (tfd < 0) { perror("timerfd_create"); return 1; }
+ case ATMEL_IOCTL_CHECK_SLAVE_MODE:
 
-    // Arm a 500ms periodic timer
-    struct itimerspec its = {0};
-    its.it_value.tv_sec = 0; its.it_value.tv_nsec = 500 * 1000000;   // first in 500ms
-    its.it_interval = its.it_value;                                  // periodic 500ms
-    timerfd_settime(tfd, 0, &its, NULL);
+                         /* 1. Disable RX/TX */
+                        atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RXDIS | ATMEL_US_TXDIS);
 
-    GMainLoop *loop = g_main_loop_new(NULL, FALSE);
-    GIOChannel *ch = g_io_channel_unix_new(tfd);
-    g_io_add_watch(ch, G_IO_IN, on_timerfd_ready, NULL);
 
-    g_print("Starting 500ms periodic timer…\n");
-    g_main_loop_run(loop);
-    return 0;
-}
+                        atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RSTTX | ATMEL_US_RSTRX);
 
+                        /* 2. USART Mode Register */
+                        mr = atmel_uart_readl(port, ATMEL_US_MR);
+                        mr &= ~(ATMEL_US_USMODE | ATMEL_US_PAR | ATMEL_US_CHRL | ATMEL_US_NBSTOP | ATMEL_US_CHMODE);
 
-/* HR TIMER*/
+                        mr |= ATMEL_US_USMODE_LIN_SLAVE| ATMEL_US_PAR_NONE | ATMEL_US_CHRL_8 | ATMEL_US_NBSTOP_1 | ATMEL_US_CHMODE_NORMAL;
 
-in common ioctl
-
-
-
-struct kwp_timer_set_ms {
-    __u32 timeout_ms;    // relative timeout in milliseconds
-    __u32 _pad;          // keep 64-bit alignment
-};
-
-struct kwp_timer_status_ms {
-    __u8  running;       // 0/1
-    __u8  expired;       // 0/1 (latched until SET or explicit clear)
-    __u8  _pad8[6];
-    __u64 remaining_ms;  // best-effort (0 if not running)
-};
-
-
-in atmel_serial.c
-
-
-#include <linux/hrtimer.h>
-#include <linux/ktime.h>
-#include <linux/time.h>     // NSEC_PER_MSEC
-#include <linux/atomic.h>
-#include <linux/uaccess.h>
-#include "kwp_timer_ioctl.h"
-
-struct kwp_timer_ctx {
-    struct hrtimer timer;
-    atomic_t expired;     // 0/1 latch set in callback
-    bool running;
-    bool inited;
-};
-
-struct atmel_uart_port {
-    struct uart_port uart;
-    /* ... existing fields ... */
-    struct kwp_timer_ctx kwp;   // add this field
-};
-
-/* --- hrtimer callback --- */
-
-static enum hrtimer_restart kwp_timer_cb(struct hrtimer *timer)
-{
-    struct kwp_timer_ctx *c = container_of(timer, struct kwp_timer_ctx, timer);
-    atomic_set(&c->expired, 1);
-    c->running = false;  // one-shot semantics
-    return HRTIMER_NORESTART;
-}
-
-/* --- helpers --- */
-
-static void kwp_timer_init_ctx(struct kwp_timer_ctx *c)
-{
-    if (c->inited)
-        return;
-
-    hrtimer_init(&c->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-    c->timer.function = kwp_timer_cb;
-    atomic_set(&c->expired, 0);
-    c->running = false;
-    c->inited = true;
-}
-
-static void kwp_timer_cancel(struct kwp_timer_ctx *c)
-{
-    if (c->running) {
-        hrtimer_cancel(&c->timer);
-        c->running = false;
-    }
-}
-
-/* --- uart_ops->ioctl --- */
-
-static int atmel_uart_ioctl(struct uart_port *port, unsigned int cmd, unsigned long arg)
-{
-    struct atmel_uart_port *ap = container_of(port, struct atmel_uart_port, uart);
-
-    switch (cmd) {
-    case KWP_IOC_INIT:
-        kwp_timer_init_ctx(&ap->kwp);
-        kwp_timer_cancel(&ap->kwp);
-        atomic_set(&ap->kwp.expired, 0);
-        return 0;
-
-    case KWP_IOC_SET: {
-        struct kwp_timer_set_ms s;
-        ktime_t kt;
-
-        if (!ap->kwp.inited)
-            kwp_timer_init_ctx(&ap->kwp);
-
-        if (copy_from_user(&s, (void __user *)arg, sizeof(s)))
-            return -EFAULT;
-        if (s.timeout_ms == 0)
-            return -EINVAL;
-
-        // Cancel any running timer; clear latch; then start
-        kwp_timer_cancel(&ap->kwp);
-        atomic_set(&ap->kwp.expired, 0);
-
-#ifdef ms_to_ktime
-        kt = ms_to_ktime(s.timeout_ms);
-#else
-        // timeout_ms is u32 -> safe multiplication
-        kt = ktime_set(0, (u64)s.timeout_ms * NSEC_PER_MSEC);
-#endif
-        ap->kwp.running = true;
-        hrtimer_start(&ap->kwp.timer, kt, HRTIMER_MODE_REL);
-        return 0;
-    }
-
-    case KWP_IOC_CHECK: {
-        struct kwp_timer_status_ms st;
-        memset(&st, 0, sizeof(st));
-
-        st.running = ap->kwp.running ? 1 : 0;
-        st.expired = atomic_read(&ap->kwp.expired) ? 1 : 0;
-
-#ifdef CONFIG_HIGH_RES_TIMERS
-        if (ap->kwp.running) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
-            ktime_t rem = hrtimer_get_remaining(&ap->kwp.timer);
-            s64 ns = ktime_to_ns(rem);
-            st.remaining_ms = (ns > 0) ? (u64)(ns / NSEC_PER_MSEC) : 0;
-#else
-            ktime_t rem = hrtimer_get_remaining(&ap->kwp.timer);
-            s64 ns = rem.tv64;
-            st.remaining_ms = (ns > 0) ? (u64)(ns / NSEC_PER_MSEC) : 0;
-#endif
-        }
-#endif
-
-        // If you prefer edge-trigger semantics:
-        // if (st.expired) atomic_set(&ap->kwp.expired, 0);
-
-        if (copy_to_user((void __user *)arg, &st, sizeof(st)))
-            return -EFAULT;
-        return 0;
-    }
-
-    default:
-        return -ENOIOCTLCMD;  // let serial_core handle other ioctls
-    }
-}
-
-
-in user Space:
-	call init first,
-		 if (ioctl(fd, KWP_IOC_INIT) < 0) { perror("INIT"); return 1; }
-	call set when it is needed	
-		struct kwp_timer_set_ms s = { .timeout_ms = 50 }; // e.g., P2max 50 ms
-		if (ioctl(fd, KWP_IOC_SET, &s) < 0) { perror("SET"); return 1; }
-
-	followed by call check in loop to see whether it is expired
-		
-		if (ioctl(fd, KWP_IOC_CHECK, &st) < 0) { perror("CHECK"); break; }
-
-        if (st.expired) {
-
-			/* do the needful*/
-		}
+                        atmel_uart_writel(port, ATMEL_US_MR, mr);
 
+                        /* 3. LIN Mode Register */
+                        linmr = 0x801;
+                        atmel_uart_writel(port, ATMEL_US_LINMR, linmr);
 
+                        /* 4. Re-enable RX/TX */
+                        atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RXEN | ATMEL_US_TXEN);
 
+                        break;
+case ATMEL_IOCTL_CHECK_SLAVE_RESPONSE:
+                        while(!(atmel_uart_readl(port, ATMEL_US_CSR) & 0x4000u));
 
+                        test_val = atmel_uart_readl(port, ATMEL_US_LINIR);
+                        if(test_val == 0x3C)
+                        {
+
+                                for (iter= 0; iter < 8; iter++)
+                                {
+                                        rec_data[iter] = 0x00;
+                                }
+
+                                iter = 0;
+                                while (iter < 8)
+                                {
+                                        while (!(atmel_uart_readl(port, ATMEL_US_CSR) & ATMEL_US_RXRDY));
+
+                                        rec_data[iter] = atmel_uart_readl(port, ATMEL_US_RHR) & 0xFF;
+                                        iter++;
+                                }
+                                for (iter= 0; iter < 8; iter++)
+                                {
+                                        printk(KERN_INFO "Slave Data: %x\t",rec_data[iter]);
+                                }
+                                printk(KERN_INFO "\nExit\n");
+
+                        }
+                        else if(test_val == 0x3D)
+                        {
+                                printk(KERN_INFO "Received 3D \n");
+                                while(!(atmel_uart_readl(port, ATMEL_US_CSR) & ATMEL_US_TXRDY));
+                                for(iter = 0 ; iter < 8; iter++)
+                                {
+                                        atmel_uart_writel(port, ATMEL_US_THR, send_slave[iter]);
+                                }
+                                linmr = 0x801;
+                                atmel_uart_writel(port, ATMEL_US_LINMR, linmr);
+
+                        }
+                        else
+                        {
+                                //Do nothing
+                        }
+
+
+                        break;
