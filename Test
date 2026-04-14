@@ -1,4 +1,4 @@
-        case ATMEL_IOCTL_SET_MODE:
+case ATMEL_IOCTL_SET_MODE:
                         /* 1. Disable RX/TX */
                         atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RXDIS | ATMEL_US_TXDIS);
 
@@ -14,47 +14,62 @@
                         atmel_uart_writel(port, ATMEL_US_MR, mr);
 
                         /* 3. LIN Mode Register */
-                        linmr = 0x800;
+                        linmr = 0x710;
                         atmel_uart_writel(port, ATMEL_US_LINMR, linmr);
 
                         /* 4. Re-enable RX/TX */
                         atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RXEN | ATMEL_US_TXEN);
 
                         break;
-                case ATMEL_IOCTL_SET_LIN_ID:
+case ATMEL_IOCTL_SET_LIN_ID:
 
                         if(copy_from_user (&linid , (void __user*) arg ,sizeof(linid)) )
                                  return -EFAULT;
 
-
-
-
                         while(!(atmel_uart_readl(port, ATMEL_US_CSR) & ATMEL_US_TXRDY));
                         if(linid == 0x3D)
                         {
-                                linmr = 0x801;
+                                linmr = 0x711;
                                 atmel_uart_writel(port, ATMEL_US_LINMR, linmr);
                                 while(atmel_uart_readl(port, ATMEL_US_LINMR) != linmr);
+
+                                atmel_uart_writel(port, ATMEL_US_LINIR,linid);
+
+                                while(!(atmel_uart_readl(port, ATMEL_US_CSR) & ATMEL_US_LINID));
                         }
-                        atmel_uart_writel(port, ATMEL_US_LINIR,linid);
-
-                        while(!(atmel_uart_readl(port, ATMEL_US_CSR) & ATMEL_US_LINID));
-                        linmr = 0x800;
-                        atmel_uart_writel(port, ATMEL_US_LINMR, linmr);
-
-                        for(iter = 0 ; iter < 8; iter++)
+                        else if(linid == 0x3C)
                         {
-                              while(!(atmel_uart_readl(port, ATMEL_US_CSR) & ATMEL_US_TXRDY));
-                              atmel_uart_writel(port, ATMEL_US_THR, send_data[iter]);
+                                linmr = 0x710;
+                                atmel_uart_writel(port, ATMEL_US_LINMR, linmr);
 
+                                while(atmel_uart_readl(port, ATMEL_US_LINMR) != linmr);
+
+                                atmel_uart_writel(port, ATMEL_US_LINIR,linid);
+
+                //              while(!(atmel_uart_readl(port, ATMEL_US_CSR) & ATMEL_US_LINID));
+                                for(iter = 0 ; iter < 8; iter++)
+                                {
+                                      while(!(atmel_uart_readl(port, ATMEL_US_CSR) & ATMEL_US_TXRDY));
+                                      atmel_uart_writel(port, ATMEL_US_THR, send_data[iter]);
+
+                                }
                         }
+                        else
+                        {
+                                /* Do nothing*/
+                        }
+
+                        test_val = atmel_uart_readl(port, ATMEL_US_CSR);
+                        printk(KERN_INFO "CSR %x\t", test_val);
+
+                        atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RXEN | ATMEL_US_TXEN | ATMEL_US_RSTSTA);
+
+                        test_val = atmel_uart_readl(port, ATMEL_US_CSR);
+                        printk(KERN_INFO "After CSR %x\t", test_val);
+
                         break;
 
-
-
-
-
- case ATMEL_IOCTL_CHECK_SLAVE_MODE:
+case ATMEL_IOCTL_CHECK_SLAVE_MODE:
 
                          /* 1. Disable RX/TX */
                         atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RXDIS | ATMEL_US_TXDIS);
@@ -71,19 +86,21 @@
                         atmel_uart_writel(port, ATMEL_US_MR, mr);
 
                         /* 3. LIN Mode Register */
-                        linmr = 0x801;
+                        linmr = 0x711;
                         atmel_uart_writel(port, ATMEL_US_LINMR, linmr);
 
                         /* 4. Re-enable RX/TX */
                         atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RXEN | ATMEL_US_TXEN);
 
                         break;
-case ATMEL_IOCTL_CHECK_SLAVE_RESPONSE:
+               case ATMEL_IOCTL_CHECK_SLAVE_RESPONSE:
                         while(!(atmel_uart_readl(port, ATMEL_US_CSR) & 0x4000u));
 
                         test_val = atmel_uart_readl(port, ATMEL_US_LINIR);
                         if(test_val == 0x3C)
                         {
+                                linmr = 0x711;
+                                atmel_uart_writel(port, ATMEL_US_LINMR, linmr);
 
                                 for (iter= 0; iter < 8; iter++)
                                 {
@@ -107,14 +124,14 @@ case ATMEL_IOCTL_CHECK_SLAVE_RESPONSE:
                         }
                         else if(test_val == 0x3D)
                         {
-                                printk(KERN_INFO "Received 3D \n");
+                                linmr = 0x710;
+                                atmel_uart_writel(port, ATMEL_US_LINMR, linmr);
+
                                 while(!(atmel_uart_readl(port, ATMEL_US_CSR) & ATMEL_US_TXRDY));
                                 for(iter = 0 ; iter < 8; iter++)
                                 {
                                         atmel_uart_writel(port, ATMEL_US_THR, send_slave[iter]);
                                 }
-                                linmr = 0x801;
-                                atmel_uart_writel(port, ATMEL_US_LINMR, linmr);
 
                         }
                         else
@@ -124,3 +141,4 @@ case ATMEL_IOCTL_CHECK_SLAVE_RESPONSE:
 
 
                         break;
+
