@@ -1,4 +1,4 @@
-case ATMEL_IOCTL_SET_MODE:
+ case ATMEL_IOCTL_SET_MODE:
                         /* 1. Disable RX/TX */
                         atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RXDIS | ATMEL_US_TXDIS);
 
@@ -9,7 +9,7 @@ case ATMEL_IOCTL_SET_MODE:
                         mr = atmel_uart_readl(port, ATMEL_US_MR);
                         mr &= ~(ATMEL_US_USMODE | ATMEL_US_PAR | ATMEL_US_CHRL | ATMEL_US_NBSTOP | ATMEL_US_CHMODE);
 
-                        mr |= ATMEL_US_USMODE_LIN_MASTER| ATMEL_US_PAR_NONE | ATMEL_US_CHRL_8 | ATMEL_US_NBSTOP_1 | ATMEL_US_CHMODE_NORMAL;
+                        mr |= ATMEL_US_USMODE_LIN_MASTER | ATMEL_US_PAR_NONE | ATMEL_US_CHRL_8 | ATMEL_US_NBSTOP_1 | ATMEL_US_CHMODE_NORMAL;
 
                         atmel_uart_writel(port, ATMEL_US_MR, mr);
 
@@ -26,18 +26,34 @@ case ATMEL_IOCTL_SET_LIN_ID:
                         if(copy_from_user (&linid , (void __user*) arg ,sizeof(linid)) )
                                  return -EFAULT;
 
+                        atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RSTSTA);
+
                         while(!(atmel_uart_readl(port, ATMEL_US_CSR) & ATMEL_US_TXRDY));
                         if(linid == 0x3D)
                         {
                                 linmr = 0x711;
+                                for (iter= 0; iter < 8; iter++)
+                                {
+                                        rec_data[iter] = 0x00;
+                                }
+
+                                iter = 0;
+
                                 atmel_uart_writel(port, ATMEL_US_LINMR, linmr);
                                 while(atmel_uart_readl(port, ATMEL_US_LINMR) != linmr);
 
                                 atmel_uart_writel(port, ATMEL_US_LINIR,linid);
 
                                 while(!(atmel_uart_readl(port, ATMEL_US_CSR) & ATMEL_US_LINID));
+                                while (iter < 8)
+                                {
+                                        while (!(atmel_uart_readl(port, ATMEL_US_CSR) & ATMEL_US_RXRDY));
+
+                                        rec_data[iter] = atmel_uart_readl(port, ATMEL_US_RHR) & 0xFF;
+                                        iter++;
+                                }
                         }
-                        else if(linid == 0x3C)
+                else if(linid == 0x3C)
                         {
                                 linmr = 0x710;
                                 atmel_uart_writel(port, ATMEL_US_LINMR, linmr);
@@ -58,18 +74,24 @@ case ATMEL_IOCTL_SET_LIN_ID:
                         {
                                 /* Do nothing*/
                         }
+                        while(!(atmel_uart_readl(port, ATMEL_US_CSR) & ATMEL_US_LINTC));
 
                         test_val = atmel_uart_readl(port, ATMEL_US_CSR);
-                        printk(KERN_INFO "CSR %x\t", test_val);
 
-                        atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RXEN | ATMEL_US_TXEN | ATMEL_US_RSTSTA);
+                        if(test_val &(ATMEL_US_LINBE | ATMEL_US_LINISFE | ATMEL_US_LINIPE | ATMEL_US_LINCE | ATMEL_US_LINSNRE | ATMEL_US_LINSTE |  ATMEL_US_LINHTE ))
+                                printk(KERN_INFO "LIN CSR Error %x\t",test_val);
 
-                        test_val = atmel_uart_readl(port, ATMEL_US_CSR);
-                        printk(KERN_INFO "After CSR %x\t", test_val);
+                        atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RSTSTA);
+                        if(linid == 0x3D)
+                        {
+                                for (iter= 0; iter < 8; iter++)
+                                {
+                                        printk(KERN_INFO "Response Data: %x\t",rec_data[iter]);
+                                }
+                        }
 
                         break;
-
-case ATMEL_IOCTL_CHECK_SLAVE_MODE:
+        case ATMEL_IOCTL_CHECK_SLAVE_MODE:
 
                          /* 1. Disable RX/TX */
                         atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RXDIS | ATMEL_US_TXDIS);
@@ -95,7 +117,7 @@ case ATMEL_IOCTL_CHECK_SLAVE_MODE:
                         break;
                case ATMEL_IOCTL_CHECK_SLAVE_RESPONSE:
                         while(!(atmel_uart_readl(port, ATMEL_US_CSR) & 0x4000u));
-
+                        atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RSTSTA);
                         test_val = atmel_uart_readl(port, ATMEL_US_LINIR);
                         if(test_val == 0x3C)
                         {
@@ -115,6 +137,15 @@ case ATMEL_IOCTL_CHECK_SLAVE_MODE:
                                         rec_data[iter] = atmel_uart_readl(port, ATMEL_US_RHR) & 0xFF;
                                         iter++;
                                 }
+                                while(!(atmel_uart_readl(port, ATMEL_US_CSR) & ATMEL_US_LINTC));
+
+                                test_val = atmel_uart_readl(port, ATMEL_US_CSR);
+
+                                if(test_val &(ATMEL_US_LINBE | ATMEL_US_LINISFE | ATMEL_US_LINIPE | ATMEL_US_LINCE | ATMEL_US_LINSNRE |  ATMEL_US_LINSTE |  ATMEL_US_LINHTE ))
+                                        printk(KERN_INFO "LIN CSR Error %x\t",test_val);
+
+                                atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RSTSTA);
+
                                 for (iter= 0; iter < 8; iter++)
                                 {
                                         printk(KERN_INFO "Slave Data: %x\t",rec_data[iter]);
@@ -122,7 +153,7 @@ case ATMEL_IOCTL_CHECK_SLAVE_MODE:
                                 printk(KERN_INFO "\nExit\n");
 
                         }
-                        else if(test_val == 0x3D)
+                else if(test_val == 0x3D)
                         {
                                 linmr = 0x710;
                                 atmel_uart_writel(port, ATMEL_US_LINMR, linmr);
@@ -132,6 +163,14 @@ case ATMEL_IOCTL_CHECK_SLAVE_MODE:
                                 {
                                         atmel_uart_writel(port, ATMEL_US_THR, send_slave[iter]);
                                 }
+                                while(!(atmel_uart_readl(port, ATMEL_US_CSR) & ATMEL_US_LINTC));
+
+                                test_val = atmel_uart_readl(port, ATMEL_US_CSR);
+
+                                if(test_val &(ATMEL_US_LINBE | ATMEL_US_LINISFE | ATMEL_US_LINIPE | ATMEL_US_LINCE | ATMEL_US_LINSNRE | ATMEL_US_LINSTE |  ATMEL_US_LINHTE ))
+                                        printk(KERN_INFO "LIN CSR Error %x\t",test_val);
+
+                                atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RSTSTA);
 
                         }
                         else
@@ -141,4 +180,3 @@ case ATMEL_IOCTL_CHECK_SLAVE_MODE:
 
 
                         break;
-
