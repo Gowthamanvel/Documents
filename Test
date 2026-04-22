@@ -1,4 +1,6 @@
- case ATMEL_IOCTL_SET_MODE:
+https://teams.microsoft.com/meet/245213225014597?p=aR7nbmulg2cgD8Q2lC
+
+case ATMEL_IOCTL_SET_MODE:
                         /* 1. Disable RX/TX */
                         atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_RXDIS | ATMEL_US_TXDIS);
 
